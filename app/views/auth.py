@@ -26,11 +26,14 @@ async def login(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON data in request body")
 
     email = data.get('email')
+    print(email)
     password = data.get('password')
+    print(password)
     password_hash = hashlib.sha256(password.encode()).hexdigest()
 
     try:
         user = db.users.find_one({"email": email})
+        print(user)
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -55,12 +58,11 @@ async def login(request: Request):
             else:
                 raise HTTPException(status_code=401, detail="Invalid or expired password")
 
-
         elif 'superadmin' in user['roles']:
             if password_hash == user['password']:
                 db.superadmin_login_history.insert_one({
-                    "company_id": user['company_id'],
-                    "company_email": user['company_email'],
+                    "superadmin_id": user['superadmin_id'],
+                    "branch_email": user['branch_email'],
                     "login_time": datetime.now()
                 })
                 token = create_access_token(email, user['roles'])
@@ -71,6 +73,25 @@ async def login(request: Request):
                     "access_token": token,
                     "token_type": "bearer"
                 }
+
+        elif 'global_superadmin' in user['roles']:
+            if user['active_status'] == 'inactive':
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+            elif password_hash == user['password']:
+                db.global_superadmin_login_history.insert_one({
+                    "company_id": user['company_id'],
+                    "company_email": user['company_email'],
+                    "login_time": datetime.now()
+                })
+                token = create_access_token(email, user['roles'])
+                return {
+                    "message": "Global Superadmin login successful",
+                    "role": user['roles'],
+                    "status": 200,
+                    "access_token": token,
+                    "token_type": "bearer"
+                }
+
             
         elif 'individual' in user['roles']:
             if password_hash == user['password']:
@@ -86,12 +107,12 @@ async def login(request: Request):
             else:
                 raise HTTPException(status_code=401, detail="Invalid email or password")         
 
-        elif 'root' in user['roles']:
+        elif 'root_user' in user['roles']:
             if password_hash == user['password']:
                 print(password)
                 token = create_access_token(email, user['roles'])
                 return {
-                    "message": "Root login successful",
+                    "message": "Root User login successful",
                     "role": user['roles'],
                     "status": 200,
                     "access_token": token,
