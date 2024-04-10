@@ -1,0 +1,14 @@
+The following is the record present in document collection 
+{"_id":{"$oid":"658d2a73bfe5b1d3d108430d"},"admin_id":{"$numberInt":"16"},"document_id":{"$numberInt":"31"},"agreement_name":"demo","agreement_type":"hello","signers":[{"name":"Signer 1","email":"signer1@example.com","phone_number":"1234567890","order":{"$numberInt":"1"},"options":{"image":true,"video":true,"govtid":true},"status":"in_progress","signer_id":{"$numberInt":"22"}},{"name":"Signer 2","email":"signer2@example.com","phone_number":"0987654321","order":{"$numberInt":"2"},"options":{"image":true,"video":true,"govtid":true},"status":"pending","signer_id":{"$numberInt":"23"}}],"watchers":[{"name":"Watcher 1","email":"watcher1@example.com","phone_number":"1122334455","watcher_id":{"$numberInt":"18"}},{"name":"Watcher 2","email":"watcher2@example.com","phone_number":"5544332211","watcher_id":{"$numberInt":"19"}}],"document_path":null,"document_base64":"JV="}
+
+The following is the record present in signerdocuments collection 
+
+{"_id":{"$oid":"658d2b0dbfe5b1d3d108430e"},"document_id":{"$numberInt":"31"},"signer_id":{"$numberInt":"20"},"video":"data:video/mp4;base64","govt_id":"JVBERi0xLjMK","signature":"iVAAAElFTkSuQmCC"}
+
+
+now modify the code accordingly based on the requirements
+
+
+
+
+

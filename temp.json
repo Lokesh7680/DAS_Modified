@@ -1,0 +1,15 @@
+{
+    "document": "base64url",
+    "signers": [
+        {"name": "Signer 1", "email": "signer1@example.com", "phone_number": 8220459801,"order": 1, "options": {"image": true,"video": true,"govtid": true}},
+        {"name": "Signer 2", "email": "signer2@example.com", "phone_number": 8220459801,"order": 2, "options": {"image": true,"video": true,"govtid": true}},
+        {"name": "Signer 3", "email": "signer3@example.com", "phone_number": 8220459801,"order": 3, "options": {"image": true,"video": true,"govtid": false}},
+        {"name": "Signer 4", "email": "signer4@example.com", "phone_number": 8220459801,"order": 4,"options": {"image": true,"video": false,"govtid": false}}
+    ],
+    "watchers": [
+        {"name": "watcher 1", "email": "signer1@example.com", "phone_number": 8220459801},
+        {"name": "watcher 2", "email": "signer2@example.com", "phone_number": 8220459801},
+        {"name": "watcher 3", "email": "signer3@example.com", "phone_number": 8220459801},
+        {"name": "watcher 4", "email": "signer4@example.com", "phone_number": 8220459801}
+    ]
+}
