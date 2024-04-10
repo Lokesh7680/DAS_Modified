@@ -1,7 +1,6 @@
-from fastapi import Depends, FastAPI, HTTPException, status, Security
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pymongo import MongoClient
-import os
 import string
 import random
 import bcrypt

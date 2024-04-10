@@ -2,16 +2,15 @@ from fastapi import APIRouter, HTTPException, Body, Depends,Request,status
 from typing import Dict
 from uuid import uuid4
 from pydantic import BaseModel
-from app.services.email_service import send_email, send_password_reset_email,notify_watchers_about_document_creation
+from app.services.email_service import send_email,notify_watchers_about_document_creation
 from app.services.otp_service import generate_otp, verify_otp
-from app.utils.db_utils import get_next_sequence, update_password_in_database
+from app.utils.db_utils import get_next_sequence
 from app.utils.auth_utils import get_current_user
 from app.dependencies.auth_logic import verify_user_role
 from pymongo import MongoClient
 from app.utils.file_utils import save_document
 from typing import List
 import jwt
-from app.utils.decorators import role_required
 from app.config import Settings
 from fastapi.security import OAuth2PasswordBearer
 import string 

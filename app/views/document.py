@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Body,Request,status
 from app.services.email_service import send_email,notify_watchers,notify_watchers_signing_completed
-from app.services.otp_service import generate_otp, verify_otp
-from app.utils.file_utils import save_document
 from pymongo import MongoClient
 from typing import List
 import jwt

@@ -2,14 +2,11 @@ from fastapi import APIRouter, HTTPException, Depends, Body, Request, status, Qu
 from app.services.email_service import send_email, notify_watchers
 from app.services.otp_service import generate_otp, verify_otp
 from app.utils.auth_utils import generate_temp_password
-from app.utils.db_utils import get_next_sequence
-from app.dependencies.auth_logic import verify_user_role
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import jwt
 from app.config import Settings
 from fastapi.security import OAuth2PasswordBearer
-from app.services.document_processing import process_signature_and_update_document
 from app.utils.signer_utils import validate_signer_document_requirements
 from fastapi.responses import JSONResponse
 from app.utils.file_utils import save_jpeg_image, save_png_image

@@ -1,9 +1,7 @@
-from fastapi import APIRouter, HTTPException, status, Body, Depends, Request
-from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, status,Request
+from datetime import datetime
 from pymongo import MongoClient
-from app.config import Settings
 from fastapi.security import OAuth2PasswordBearer
-import jwt
 import json
 from app.utils.jwt import create_access_token
 import hashlib

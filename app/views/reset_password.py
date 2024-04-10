@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Query
 from app.config import settings
 import string
 import random
-from fastapi import APIRouter, HTTPException, Query, Depends
-from app.dependencies.auth_logic import is_valid_password, get_current_user
-from app.utils.db_utils import update_password_in_database, get_user_password, get_user_role
+from fastapi import APIRouter, HTTPException, Query
+from app.dependencies.auth_logic import is_valid_password
+from app.utils.db_utils import update_password_in_database, get_user_password
 from app.config import settings
 from app.services.email_service import send_email
 import string
