@@ -132,6 +132,19 @@ async def get_individual_requests(current_user: dict = Depends(get_current_user)
         })
     return pending_requests
 
+@sigunp_individual_router.get('/get_individuals')
+async def get_individuals(current_user: dict = Depends(get_current_user)):
+    if current_user.get('roles') != ['root_user']:
+        raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
+    
+    individual_records = db.users.find({"roles": "individual"}, {"password": 0})  # Excluding password from the response
+    individuals = []
+    for record in individual_records:
+        # Convert ObjectId to string
+        record['_id'] = str(record['_id'])
+        individuals.append(record)
+    return individuals
+
 # Route to accept or reject individual account request (for root user)
 # @sigunp_individual_router.post('/accept_reject_individual_request')
 # async def accept_reject_individual_request(request: Request,current_user: dict = Depends(get_current_user)):
@@ -179,55 +192,65 @@ async def get_individual_requests(current_user: dict = Depends(get_current_user)
 #         send_email(email, "Account Creation Rejected", f"Dear {individual_data['first_name']},\n\nYour account creation request has been rejected by the administrator.\n\nPlease contact the administrator for further details.\n\nBest regards,\n{settings.company_name}")
 #         return {"message": "Account creation request rejected", "status": 200}
 
-@sigunp_individual_router.post('/accept_reject_individual_request')
-async def accept_reject_individual_request(request: Request, current_user: dict = Depends(get_current_user)):
+@sigunp_individual_router.post('/accept_individual_request')
+async def accept_individual_request(request: Request, current_user: dict = Depends(get_current_user)):
     data = await request.json()
     email = data.get('email')
-    is_accepted = data.get('is_accepted')
+    decision = data.get('decision')
+
+    if decision != "accept":
+        return {"message": "Invalid decision. Please specify 'accept' to approve the request.", "status": 400}
 
     if current_user.get('roles') != ['root_user']:
         raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
-    
-    # Fetch the stored data from temporary storage
+
     individual_data = individual_details.pop(email, None)
     if individual_data is None:
         raise HTTPException(status_code=404, detail="Individual data not found")
 
-    # Check the is_accepted flag and handle the logic accordingly
-    if is_accepted:
-        # Proceed with the acceptance process
-        individual_id = get_next_sequence(db, 'individual_id')       
-        password = individual_data["password"]
-        hash = hashlib.sha256(password.encode()).hexdigest()
+    individual_id = get_next_sequence(db, 'individual_id')
+    password = individual_data["password"]
+    hash = hashlib.sha256(password.encode()).hexdigest()
 
-        # Create the individual user in the database
-        db.users.insert_one({
-            "first_name": individual_data['first_name'],
-            "last_name": individual_data['last_name'],
-            "email": individual_data['email'],
-            "password": hash,
-            "phone_number": individual_data['phone_number'],
-            "date_of_birth" : individual_data['date_of_birth'],
-            "individual_id": individual_id,
-            "roles": individual_data['roles'],
-            "status": "Approved"
-        })
+    db.users.insert_one({
+        "first_name": individual_data['first_name'],
+        "last_name": individual_data['last_name'],
+        "email": individual_data['email'],
+        "password": hash,
+        "phone_number": individual_data['phone_number'],
+        "date_of_birth" : individual_data['date_of_birth'],
+        "individual_id": individual_id,
+        "roles": individual_data['roles'],
+        "status": "Approved"
+    })
 
-        # Send email to individual with credentials
-        email_body = f"Dear {individual_data['first_name']},\n\nYour account has been created successfully.\n\nHere are your login credentials:\nEmail: {email}\nPassword: {password}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nBest regards,\n{settings.company_name}"
-        send_email(email, "Account Created", email_body)
+    email_body = f"Dear {individual_data['first_name']},\n\nYour account has been created successfully.\n\nHere are your login credentials:\nEmail: {email}\nPassword: {password}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nBest regards,\n{settings.company_name}"
+    send_email(email, "Account Created", email_body)
 
-        # Notify individual about approval
-        send_email(email, "Account Created", f"Dear {individual_data['first_name']},\n\nYour account has been created successfully. You can now log in using the provided credentials.\n\nBest regards,\n{settings.company_name}")
+    send_email(email, "Account Created", f"Dear {individual_data['first_name']},\n\nYour account has been created successfully. You can now log in using the provided credentials.\n\nBest regards,\n{settings.company_name}")
 
-        return {"message": "Account created successfully", "status": 200}
-    else:
-        # Handle the rejection scenario
-        # Send a rejection email to the individual
-        rejection_email_body = f"Dear {individual_data['first_name']},\n\nYour account creation request has been rejected by the administrator.\n\nPlease contact the administrator for further details.\n\nBest regards,\n{settings.company_name}"
-        send_email(email, "Account Creation Rejected", rejection_email_body)
+    return {"message": "Account created successfully", "status": 200}
 
-        return {"message": "Account creation request rejected", "status": 200}
+@sigunp_individual_router.post('/reject_individual_request')
+async def reject_individual_request(request: Request, current_user: dict = Depends(get_current_user)):
+    data = await request.json()
+    email = data.get('email')
+    decision = data.get('decision')
+
+    if decision != "reject":
+        return {"message": "Invalid decision. Please specify 'reject' to decline the request.", "status": 400}
+
+    if current_user.get('roles') != ['root_user']:
+        raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
+
+    individual_data = individual_details.pop(email, None)
+    if individual_data is None:
+        raise HTTPException(status_code=404, detail="Individual data not found")
+
+    rejection_email_body = f"Dear {individual_data['first_name']},\n\nYour account creation request has been rejected by the administrator.\n\nPlease contact the administrator for further details.\n\nBest regards,\n{settings.company_name}"
+    send_email(email, "Account Creation Rejected", rejection_email_body)
+
+    return {"message": "Account creation request rejected", "status": 200}
 
 @sigunp_individual_router.post('/submit_document')
 async def submit_document(data: dict = Body(...), current_user: dict = Depends(get_current_user)):

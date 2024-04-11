@@ -51,17 +51,17 @@ async def create_global_superadmin(request: Request, current_user: dict = Depend
         raise HTTPException(status_code=403, detail="Only the root user can create global superadmins")
     
     data = await request.json()
-    company_email = data.get('company_email')
-
+    email = data.get('email')  # Change 'company_email' to 'email'
+    
     # Generate a random password for the global superadmin
-    password = generate_password(company_email)
+    password = generate_password(email)
 
     root_user_otp = generate_otp(current_user['email'])
-    company_otp = generate_otp(company_email) 
+    company_otp = generate_otp(email)  # Change 'company_email' to 'email'
 
     # Store the OTP for the new company in the database
     otp_expiry = datetime.now() + timedelta(minutes=5)  # Set expiry time for OTP
-    db.otps.insert_one({"email": company_email, "otp": company_otp, "expiry": otp_expiry})
+    db.otps.insert_one({"email": email, "otp": company_otp, "expiry": otp_expiry})
 
     # Temporarily store the creator global superadmin OTP
     temp_storage[current_user['email']] = root_user_otp
@@ -69,12 +69,12 @@ async def create_global_superadmin(request: Request, current_user: dict = Depend
     # Send OTPs to both the creator global superadmin and the new company
     send_email(current_user['email'], "OTP Verification", f"Dear Root User,\n\nThank you for initiating the company creation process. Your One-Time Password (OTP) for verification is: {root_user_otp}\n\nPlease use this OTP to proceed with the creation process.\n\nBest regards,\n[Your Company Name]")
 
-    send_email(company_email, "OTP Verification", f"Dear User,\n\nAn OTP has been generated for your company creation process. Your One-Time Password (OTP) for verification is: {company_otp}\n\nKindly use this OTP to complete the creation process.\n\nBest regards,\n[Your Company Name]")
+    send_email(email, "OTP Verification", f"Dear User,\n\nAn OTP has been generated for your company creation process. Your One-Time Password (OTP) for verification is: {company_otp}\n\nKindly use this OTP to complete the creation process.\n\nBest regards,\n[Your Company Name]")
 
     # Store the company data in temp_storage
     company_data = {
+        "email": email,  # Change 'company_email' to 'email'
         "company_name": data.get('company_name'),
-        "company_email": company_email,
         "ceo": data.get('ceo'),
         "phone_number": data.get('phone_number'),
         "gst_number": data.get('gst_number'),
@@ -88,11 +88,10 @@ async def create_global_superadmin(request: Request, current_user: dict = Depend
         "website": data.get('website'),
         "roles": ['global_superadmin'],
         "password": password,
-        "active_status" : "true",
-        "allow_create_admins": data.get('allow_create_admins', False)  # Include the allow_create_admins field
+        "active_status": "active"
     }
 
-    temp_storage[company_email] = company_data
+    temp_storage[email] = company_data  # Change 'company_email' to 'email'
 
     return {"message": "OTPs sent to creator global superadmin and company for verification", "status code": 200}
 
@@ -100,24 +99,20 @@ async def create_global_superadmin(request: Request, current_user: dict = Depend
 @global_superadmin_router.post('/verify_global_superadmin_otp')
 async def verify_global_superadmin_otp(request: Request, current_user: dict = Depends(get_current_user)):
     data = await request.json()
-    company_email = data.get('company_email')
+    email = data.get('email')  # Change 'company_email' to 'email'
     creator_global_superadmin_otp = data.get('creator_global_superadmin_otp')
     root_user_otp = data.get('root_user_otp')
 
     # Fetch the OTPs for the creator global superadmin and the root user
     root_user_otp_record = db.otps.find_one({"email": current_user['email']})
-    print("root_user_otp_record : ",root_user_otp_record)
-    creator_global_superadmin_otp_record = db.otps.find_one({"email":company_email})  # Adjust email as per your implementation
-    print("creator_global_superadmin_otp_record : ",creator_global_superadmin_otp_record)
+    creator_global_superadmin_otp_record = db.otps.find_one({"email": email})  # Change 'company_email' to 'email'
 
     # Verify the OTPs for the creator global superadmin and the root user
     root_user_otp_verified = root_user_otp_record and root_user_otp_record['otp'] == root_user_otp and datetime.now() < root_user_otp_record['expiry']
-    print("root_user_otp_verified : ",root_user_otp_verified)
-    creator_global_superadmin_otp_verified  = creator_global_superadmin_otp_record  and creator_global_superadmin_otp_record['otp'] == creator_global_superadmin_otp and datetime.now() < creator_global_superadmin_otp_record['expiry']
-    print("creator_global_superadmin_otp_verified : ",creator_global_superadmin_otp_verified)
+    creator_global_superadmin_otp_verified = creator_global_superadmin_otp_record and creator_global_superadmin_otp_record['otp'] == creator_global_superadmin_otp and datetime.now() < creator_global_superadmin_otp_record['expiry']
 
     if creator_global_superadmin_otp_verified and root_user_otp_verified:
-        company_data = temp_storage.pop(company_email, None)
+        company_data = temp_storage.pop(email, None)
         if not company_data:
             raise HTTPException(status_code=404, detail="Company data not found")
 
@@ -131,7 +126,7 @@ async def verify_global_superadmin_otp(request: Request, current_user: dict = De
         company = {
             "company_id": company_id,
             "company_name": company_data['company_name'],
-            "company_email": company_data['company_email'],
+            "email": email,  # Change 'company_email' to 'email'
             "ceo": company_data['ceo'],
             "phone_number": company_data['phone_number'],
             "gst_number": company_data['gst_number'],
@@ -145,21 +140,21 @@ async def verify_global_superadmin_otp(request: Request, current_user: dict = De
             "website": company_data['website'],
             "roles": company_data['roles'],
             "password": hash,
-            "active_status": "true",
-            "allow_create_admins": company_data['allow_create_admins']  # Include the allow_create_admins field
+            "active_status": "active"
         }
         db.users.insert_one(company)
 
         # Delete the OTPs from the database
-        db.otps.delete_many({"email": {"$in": [current_user['email'], company_email]}})
+        db.otps.delete_many({"email": {"$in": [current_user['email'], email]}})
 
         # Send email to the new company with credentials
-        email_body = f"Subject: Your Company Credentials\n\nDear {company_data['ceo']},\n\nCongratulations! Your company has been successfully registered as a global superadmin on our platform.\n\nHere are your login credentials:\nEmail: {company_data['company_email']}\nPassword: {company_data['password']}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nIf you have any questions or need assistance, feel free to reach out to our support team at {settings.support_email} or call us at {settings.support_phone_number}.\n\nThank you for choosing us!\n\nBest Regards,\n{settings.company_name}"
-        send_email(company_data['company_email'], "Your Company Credentials", email_body)
+        email_body = f"Subject: Your Company Credentials\n\nDear {company_data['ceo']},\n\nCongratulations! Your company has been successfully registered as a global superadmin on our platform.\n\nHere are your login credentials:\nEmail: {email}\nPassword: {company_data['password']}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nIf you have any questions or need assistance, feel free to reach out to our support team at {settings.support_email} or call us at {settings.support_phone_number}.\n\nThank you for choosing us!\n\nBest Regards,\n{settings.company_name}"
+        send_email(email, "Your Company Credentials", email_body)
 
         return {"message": "Global Superadmin created successfully", "company_id": company_id, "status": 200}
     else:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+
 
 @global_superadmin_router.get('/get_global_superadmins')
 async def get_global_superadmins(current_user: dict = Depends(get_current_user)):
@@ -241,24 +236,9 @@ async def update_global_superadmin_status(request: Request, current_user: dict =
                  f"Your Company Name"
 
     # Send email notification to the global superadmin
-    send_email(global_superadmin['company_email'], email_subject, email_body)
+    send_email(global_superadmin['email'], email_subject, email_body)
 
     return {"message": "Global Superadmin status updated successfully"}
-
-@global_superadmin_router.delete('/remove_global_superadmin/{company_id}')
-async def remove_global_superadmin(company_id: int, current_user: dict = Depends(get_current_user)):
-    # Check if the current user has the necessary permissions to remove global superadmins
-    if current_user.get('roles') != ['root_user']:
-        raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
-    # Check if the global superadmin to be removed exists
-    global_superadmin = db.users.find_one({"company_id": company_id, "roles": "global_superadmin"})
-    if not global_superadmin:
-        raise HTTPException(status_code=404, detail="Global Superadmin not found")
-
-    # Remove the global superadmin from the database
-    db.users.delete_one({"company_id": company_id, "roles": "global_superadmin"})
-
-    return {"message": "Global Superadmin removed successfully", "status": 200}
 
 @global_superadmin_router.get('/global_superadmins_status_history/{company_id}')
 async def get_global_superadmin_status_history(company_id: int, current_user: dict = Depends(get_current_user)):
@@ -277,3 +257,20 @@ async def get_global_superadmin_status_history(company_id: int, current_user: di
         return global_superadmin_history
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@global_superadmin_router.delete('/remove_global_superadmin/{company_id}')
+async def remove_global_superadmin(company_id: int, current_user: dict = Depends(get_current_user)):
+    # Check if the current user has the necessary permissions to remove global superadmins
+    if current_user.get('roles') != ['root_user']:
+        raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
+    # Check if the global superadmin to be removed exists
+    global_superadmin = db.users.find_one({"company_id": company_id, "roles": "global_superadmin"})
+    if not global_superadmin:
+        raise HTTPException(status_code=404, detail="Global Superadmin not found")
+
+    # Remove the global superadmin from the database
+    db.users.delete_one({"company_id": company_id, "roles": "global_superadmin"})
+
+    return {"message": "Global Superadmin removed successfully", "status": 200}
+

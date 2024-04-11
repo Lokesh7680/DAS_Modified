@@ -37,7 +37,7 @@ async def login(request: Request):
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-
+        
         elif 'signer_id' in user and 'signer' in user['roles']:
             credentials = db.users.find_one({"signer_id": user['signer_id']})
             if credentials and password_hash == credentials['password'] and datetime.now() <= credentials['expiration']:
@@ -59,10 +59,12 @@ async def login(request: Request):
                 raise HTTPException(status_code=401, detail="Invalid or expired password")
 
         elif 'superadmin' in user['roles']:
-            if password_hash == user['password']:
+            if user['active_status'] == 'inactive':
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+            elif password_hash == user['password']:
                 db.superadmin_login_history.insert_one({
                     "superadmin_id": user['superadmin_id'],
-                    "branch_email": user['branch_email'],
+                    "email": user['email'],
                     "login_time": datetime.now()
                 })
                 token = create_access_token(email, user['roles'])
@@ -74,13 +76,14 @@ async def login(request: Request):
                     "token_type": "bearer"
                 }
 
+
         elif 'global_superadmin' in user['roles']:
             if user['active_status'] == 'inactive':
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
             elif password_hash == user['password']:
                 db.global_superadmin_login_history.insert_one({
                     "company_id": user['company_id'],
-                    "company_email": user['company_email'],
+                    "email": user['email'],
                     "login_time": datetime.now()
                 })
                 token = create_access_token(email, user['roles'])
