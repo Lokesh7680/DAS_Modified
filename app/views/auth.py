@@ -102,6 +102,7 @@ async def login(request: Request):
                 token = create_access_token(email, user['roles'])
                 return {
                     "message": "Individual login successful",
+                    'individual_id':user['individual_id'],
                     "role": user['roles'],
                     "status": 200,
                     "access_token": token,
@@ -138,6 +139,7 @@ async def login(request: Request):
                 token = create_access_token(email, user['roles'])
                 return {
                     "message": "Admin login successful",
+                    "admin_id":user['admin_id'],
                     "role": user['roles'],
                     "status": 200,
                     "access_token": token,

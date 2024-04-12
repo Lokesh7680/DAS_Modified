@@ -70,6 +70,9 @@ async def get_document_details(request: Request, current_user: dict = Depends(ge
         # Check if the current admin has permission to access this document
         if document['admin_id'] != current_user['admin_id']:
             raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this document")
+        
+        if document['indiviudal_id'] != current_user['indiviudal_id']:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this document")
 
         eligible_signer_ids = [int(signer['signer_id']) for signer in document.get('signers', []) 
                                if signer.get('status') in ['submitted', 'success']]
@@ -86,7 +89,7 @@ async def get_document_details(request: Request, current_user: dict = Depends(ge
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @documents_router.post('/accept_signer_status_individual')
 async def accept_signer_status(data: dict = Body(...), current_user: dict = Depends(get_current_user)):
     document_id = data.get('document_id')

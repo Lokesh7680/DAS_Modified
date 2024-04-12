@@ -58,148 +58,95 @@ def generate_password(admin_email, length=8):
 
 from datetime import datetime, timedelta
 
-# temp_storage = {}
-
-SUPERADMIN_BRANCHES = []
-
-# Update SUPERADMIN_BRANCHES based on the branches associated with the current superadmin
-def update_superadmin_branches(current_user):
-    global SUPERADMIN_BRANCHES
-    if current_user.get("branches"):
-        SUPERADMIN_BRANCHES = current_user.get("branches")
-    else:
-        SUPERADMIN_BRANCHES = []
-
+from fastapi import APIRouter, Request, Depends, HTTPException
+from datetime import datetime, timedelta
+import hashlib
 
 @admin_router.post('/create_admin')
 async def create_admin(request: Request, current_user: dict = Depends(get_current_user)):
-    # Update SUPERADMIN_BRANCHES based on the current user's data
-    update_superadmin_branches(current_user)
+    # Check if the current user is a superadmin
+    if current_user.get('roles') != ['superadmin']:
+        raise HTTPException(status_code=403, detail="Only the superadmin can create admins")
 
     data = await request.json()
     
-    first_name = data.get('first_name')
-    last_name = data.get('last_name')
-    admin_email = data.get('email')
-    phone_number = data.get('phone_number')
-    date_of_birth = data.get('date_of_birth')
-    branches = data.get('branches')  # Get selected branches from the request body
+    email = data.get('email')
 
-    # Generate a random password for the admin
-    password = generate_password(admin_email)
+    admin_id = get_next_sequence(db, 'adminid')
 
-    # Generate separate OTPs for the superadmin and admin
-    admin_otp = generate_otp(admin_email)
-    superadmin_otp = generate_otp(current_user['company_email'])
+    password = generate_password(email)
+    superadmin_otp = generate_otp(current_user['email'])
+    admin_otp = generate_otp(email)
 
-    print("Superadmin OTP:", superadmin_otp)
-    print("Admin OTP:", admin_otp)
+    otp_expiry = datetime.now() + timedelta(minutes=5)
+    db.otps.insert_one({"email": email, "otp": admin_otp, "expiry": otp_expiry})
+    db.otps.insert_one({"email": current_user['email'], "otp": superadmin_otp, "expiry": otp_expiry})
 
-    # Check if an OTP record already exists for the admin email
-    existing_otp_record = db.otps.find_one({"email": admin_email})
+    send_email(current_user['email'], "OTP Verification", f"Dear Superadmin,\n\nThank you for initiating the admin creation process. Your One-Time Password (OTP) for verification is: {superadmin_otp}\n\nPlease use this OTP to proceed with the creation process.\n\nBest regards,\n{settings.company_name}")
 
-    if existing_otp_record:
-        # Update the existing OTP record with new OTP value and expiry time
-        db.otps.update_one(
-            {"email": admin_email},
-            {"$set": {"otp": admin_otp, "expiry": datetime.now() + timedelta(minutes=5)}}
-        )
-    else:
-        # Store the OTP temporarily in the database
-        otp_expiry = datetime.now() + timedelta(minutes=5) # Set expiry time for OTP
-        db.otps.insert_one({"email": admin_email, "otp": admin_otp, "expiry": otp_expiry})
+    send_email(email, "OTP Verification", f"Dear Admin,\n\nAn OTP has been generated for your admin creation process. Your One-Time Password (OTP) for verification is: {admin_otp}\n\nKindly use this OTP to complete the creation process.\n\nBest regards,\n{settings.company_name}")
 
-    print("OTP records stored in the database")
-    print(admin_email)
-    # Send OTPs to the superadmin and admin
-    send_email(current_user['company_email'], "OTP Verification", f"Dear Superadmin,\n\nThank you for initiating the admin creation process. Your One-Time Password (OTP) for verification is: {superadmin_otp}\n\nPlease use this OTP to proceed with the creation process.\n\nBest regards,\n{settings.company_name}")
-
-    send_email(admin_email, "OTP Verification", f"Dear Admin,\n\nAn OTP has been generated for your admin creation process. Your One-Time Password (OTP) for verification is: {admin_otp}\n\nKindly use this OTP to complete the creation process.\n\nBest regards,\n{settings.company_name}")
-
-    print("OTP emails sent")
-
-    # Temporarily store the admin data
-    temp_storage[admin_email] = {
-        'first_name': first_name,
-        'last_name': last_name,
-        'admin_email': admin_email,
-        'phone_number': phone_number,
-        'date_of_birth': date_of_birth,
-        'password': password,
-        'branches': branches,  # Include selected branches in the temporary storage
-        'created_by': current_user['company_id'] 
+    admin_data = {
+        "admin_id": admin_id,
+        "first_name": data.get('first_name'),
+        "last_name": data.get('last_name'),
+        "email": email,
+        "phone_number": data.get('phone_number'),
+        "date_of_birth": data.get('date_of_birth'),
+        "password": password,
+        "created_by": current_user['superadmin_id'],
+        "roles": ["admin"],  # Add the roles field
+        "active_status": "active"  # Add the active_status field
     }
 
-    print(temp_storage)
+    temp_storage[email] = admin_data
 
     return {"message": "OTPs sent to superadmin and admin for verification", "status code": 200}
 
-@admin_router.post('/verify_otp')
+@admin_router.post('/verify_admin_creation_otp')
 async def verify_admin_creation_otp(request: Request, current_user: dict = Depends(get_current_user)):
-    # Update SUPERADMIN_BRANCHES based on the current user's data
-    update_superadmin_branches(current_user)
+    # Check if the current user is a superadmin
+    if current_user.get('roles') != ['superadmin']:
+        raise HTTPException(status_code=403, detail="Only the superadmin can verify admin creation OTP")
 
     data = await request.json()
     
-    admin_email = data.get('admin_email')
+    email = data.get('email')
     superadmin_otp = data.get('superadmin_otp')
     admin_otp = data.get('admin_otp')
 
-    # Fetch the OTP for the superadmin and admin from the database
-    superadmin_otp_record = db.otps.find_one({"email": current_user['company_email']})
-    admin_otp_record = db.otps.find_one({"email": admin_email})
+    superadmin_otp_record = db.otps.find_one({"email": current_user['email']})
+    admin_otp_record = db.otps.find_one({"email": email})
 
-    # Verify the OTP for both superadmin and admin
     superadmin_otp_verified = superadmin_otp_record and superadmin_otp_record['otp'] == superadmin_otp and datetime.now() < superadmin_otp_record['expiry']
-    print(superadmin_otp_verified)
     admin_otp_verified = admin_otp_record and admin_otp_record['otp'] == admin_otp and datetime.now() < admin_otp_record['expiry']
-    print(admin_otp_verified)
 
     if superadmin_otp_verified and admin_otp_verified:
-        admin_data = temp_storage.pop(admin_email, None)
-        print(admin_data)
+        admin_data = temp_storage.pop(email, None)
         if not admin_data:
             raise HTTPException(status_code=404, detail="Admin data not found")
 
-        # Generate a unique admin ID
-        admin_id = get_next_sequence(db, 'adminid')
         password = admin_data["password"]
         hash = hashlib.sha256(password.encode()).hexdigest()
 
-        # Create the admin user with admin_id
-        user = {
-            "admin_id": admin_id,
-            "email": admin_email,
-            "password" : hash,
-            "roles": ['admin'],
-            "first_name": admin_data['first_name'],
-            "last_name": admin_data['last_name'],
-            "phone_number": admin_data['phone_number'],
-            "date_of_birth": admin_data['date_of_birth'],
-            "active_status": "true",
-            "branches": admin_data['branches'],# Include selected branches
-            "created_by":admin_data['created_by']
+        admin_data['password'] = hash
+        db.users.insert_one(admin_data)
 
-        }
-        db.users.insert_one(user)
-        print(admin_data['password'])
+        db.otps.delete_many({"email": {"$in": [current_user['email'], email]}})
 
-        # Delete the OTPs from the database
-        db.otps.delete_many({"email": {"$in": [current_user['company_email'], admin_email]}})
+        email_body = f"Subject: Your Admin Credentials\n\nDear {admin_data['first_name']} {admin_data['last_name']},\n\nCongratulations! You have been successfully registered as an admin on our platform.\n\nHere are your login credentials:\nEmail: {email}\nPassword: {password}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nIf you have any questions or need assistance, feel free to reach out to our support team at {settings.support_email} or call us at {settings.support_phone_number}.\n\nThank you for choosing us!\n\nBest Regards,\n{settings.company_name}"
+        send_email(email, "Your Admin Credentials", email_body)
 
-        # Send email to the new admin with credentials
-        email_body = f"Subject: Your Admin Credentials\n\nDear {admin_data['first_name']} {admin_data['last_name']},\n\nCongratulations! You have been successfully registered as an admin on our platform.\n\nHere are your login credentials:\nEmail: {admin_email}\nPassword: {password}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nIf you have any questions or need assistance, feel free to reach out to our support team at {settings.support_email} or call us at {settings.support_phone_number}.\n\nThank you for choosing us!\n\nBest Regards,\n{settings.company_name}"
-        send_email(admin_email, "Your Admin Credentials", email_body)
-
-        return {"message": "Admin created successfully", "admin_id": admin_id, "status": 200}
+        return {"message": "Admin created successfully", "admin_id": admin_data["admin_id"], "status": 200}
     else:
         raise HTTPException(status_code=401, detail="Invalid or expired OTP")
 
+
 @admin_router.get('/get_admins')
 async def get_admins(current_user: dict = Depends(get_current_user)):
-    company_id = current_user.get('company_id')  # Assuming the company_id is stored in current_user
+    superadmin_id = current_user.get('superadmin_id')  # Assuming the superadmin_id is stored in current_user
 
-    admin_records = db.users.find({"roles": "admin", "created_by": company_id}, {"password": 0})  # Excluding password from the response
+    admin_records = db.users.find({"roles": "admin", "created_by": superadmin_id}, {"password": 0})  # Excluding password from the response
     admins = []
     for record in admin_records:
         # Convert ObjectId to string

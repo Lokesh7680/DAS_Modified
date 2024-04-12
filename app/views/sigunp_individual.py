@@ -70,17 +70,18 @@ async def create_individual(request: Request):
     password = generate_password(email)
     # Generate OTP for verification
     individual_otp = generate_otp(email)
-    # Store the OTP temporarily
+
+    # Store the individual data temporarily
     temp_storage[email] = {
         'first_name': first_name,
         'last_name': last_name,
         'email': email,
         'phone_number': phone_number,
         'password': password,
-        'date_of_birth' : date_of_birth,
-        'roles': ['individual'],
+        'date_of_birth': date_of_birth,
         'otp': individual_otp
     }
+
     # Send OTP email to the individual
     send_email(email, "OTP Verification", f"Dear Individual,\n\nAn OTP has been generated for your account creation process. Your One-Time Password (OTP) for verification is: {individual_otp}\n\nKindly use this OTP to complete the creation process.\n\nBest regards,\n{settings.company_name}")
 
@@ -92,45 +93,70 @@ async def verify_individual_creation_otp(request: Request):
     data = await request.json()
     email = data.get('email')
     individual_otp = data.get('individual_otp')
-    print("temp_storage:",temp_storage)
 
     # Fetch the stored data from temporary storage
     individual_data = temp_storage.get(email)
     if individual_data is None:
-        raise HTTPException(status_code=404, detail="Individual data not found")
-    
-    # Store individual data in separate variable for further processing
-    individual_details[email] = individual_data
+        raise HTTPException(status_code=404, detail="Individual data not found. Please make sure to trigger the create_individual endpoint first.")
 
     # Verify the OTP for the individual
-    if individual_data['otp'] == individual_otp:
-        # Notify individual about waiting for approval
+    if individual_data.get('otp') == individual_otp:
+        # Your OTP verification logic here
+
+        # After successful verification, you can remove the OTP from the individual data
+        del individual_data['otp']
+
+        # Perform any other processing related to OTP verification
+
+        # Store the individual data after successful OTP verification
+        temp_storage[email] = individual_data
+
+        # Notify individual and root user
         send_email(email, "Account Details Submitted", f"Dear {individual_data['first_name']},\n\nYour account details have been submitted successfully. They are now waiting for approval from the administrator.\n\nBest regards,\n{settings.company_name}")
 
         root_user_email = "lokesh.ksn@mind-graph.com"  # Replace with root user's email
         send_email(root_user_email, "New Individual Account Creation Request", f"Dear Root User,\n\nA new individual account creation request has been received.\n\nEmail: {email}\n\nPlease review the request.\n\nBest regards,\n{settings.company_name}")
 
         return {"message": "Account details sent for approval", "status": 200}
-    
     else:
         raise HTTPException(status_code=401, detail="Invalid OTP")
-    
+
+
 # Route to get all individual account creation requests (for root user)
 @sigunp_individual_router.get('/get_individual_requests')
 async def get_individual_requests(current_user: dict = Depends(get_current_user)):
     # Fetch all pending individual requests from the temporary storage
     if current_user.get('roles') != ['root_user']:
         raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
-    pending_requests = []
+    
+    verified_requests = []
     for email, individual_data in temp_storage.items():
-        pending_requests.append({
-            "email": email,
-            "first_name": individual_data['first_name'],
-            "last_name": individual_data['last_name'],
-            "phone_number": individual_data['phone_number'],
-            "date_of_birth": individual_data['date_of_birth']
-        })
-    return pending_requests
+        # Ensure only verified requests are included
+        if 'otp' not in individual_data:
+            verified_requests.append({
+                "email": email,
+                "first_name": individual_data['first_name'],
+                "last_name": individual_data['last_name'],
+                "phone_number": individual_data['phone_number'],
+                "date_of_birth": individual_data['date_of_birth']
+            })
+    return verified_requests
+
+
+# @sigunp_individual_router.get('/get_individuals')
+# async def get_and_delete_accepted_individuals(current_user: dict = Depends(get_current_user)):
+#     if current_user.get('roles') != ['root_user']:
+#         raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
+    
+#     # Fetch and delete accepted individual records
+#     accepted_individuals = list(db.users.find({"roles": "individual", "status": "Approved"}, {"password": 0}))
+#     for record in accepted_individuals:
+#         # Convert ObjectId to string
+#         record['_id'] = str(record['_id'])
+#         # Delete the accepted individual record from the database
+#         db.users.delete_one({"_id": record['_id']})
+#     return accepted_individuals
+
 
 @sigunp_individual_router.get('/get_individuals')
 async def get_individuals(current_user: dict = Depends(get_current_user)):
@@ -203,8 +229,10 @@ async def accept_individual_request(request: Request, current_user: dict = Depen
 
     if current_user.get('roles') != ['root_user']:
         raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
+    
+    print("temp_storage : ",temp_storage)
 
-    individual_data = individual_details.pop(email, None)
+    individual_data = temp_storage.pop(email, None)
     if individual_data is None:
         raise HTTPException(status_code=404, detail="Individual data not found")
 
@@ -212,22 +240,29 @@ async def accept_individual_request(request: Request, current_user: dict = Depen
     password = individual_data["password"]
     hash = hashlib.sha256(password.encode()).hexdigest()
 
+    # Store individual data in the database
     db.users.insert_one({
         "first_name": individual_data['first_name'],
         "last_name": individual_data['last_name'],
         "email": individual_data['email'],
         "password": hash,
         "phone_number": individual_data['phone_number'],
-        "date_of_birth" : individual_data['date_of_birth'],
+        "date_of_birth": individual_data['date_of_birth'],
         "individual_id": individual_id,
-        "roles": individual_data['roles'],
+        "roles": ["individual"],
         "status": "Approved"
     })
 
+    # Notify individual about account creation
     email_body = f"Dear {individual_data['first_name']},\n\nYour account has been created successfully.\n\nHere are your login credentials:\nEmail: {email}\nPassword: {password}\n\nPlease keep your credentials secure and do not share them with anyone.\n\nBest regards,\n{settings.company_name}"
     send_email(email, "Account Created", email_body)
 
-    send_email(email, "Account Created", f"Dear {individual_data['first_name']},\n\nYour account has been created successfully. You can now log in using the provided credentials.\n\nBest regards,\n{settings.company_name}")
+    # Notify root user about account approval
+    root_user_email = "lokesh.ksn@mind-graph.com"  # Replace with root user's email
+    send_email(root_user_email, "Individual Account Approved", f"Dear Root User,\n\nThe individual account creation request for {email} has been approved.\n\nBest regards,\n{settings.company_name}")
+
+    # Remove the individual record from pending requests
+    temp_storage.pop(email, None)
 
     return {"message": "Account created successfully", "status": 200}
 
@@ -243,12 +278,16 @@ async def reject_individual_request(request: Request, current_user: dict = Depen
     if current_user.get('roles') != ['root_user']:
         raise HTTPException(status_code=403, detail="You are not authorized to perform this action.")
 
-    individual_data = individual_details.pop(email, None)
+    individual_data = temp_storage.pop(email, None)
     if individual_data is None:
         raise HTTPException(status_code=404, detail="Individual data not found")
 
+    # Notify individual about account rejection
     rejection_email_body = f"Dear {individual_data['first_name']},\n\nYour account creation request has been rejected by the administrator.\n\nPlease contact the administrator for further details.\n\nBest regards,\n{settings.company_name}"
     send_email(email, "Account Creation Rejected", rejection_email_body)
+
+    # Remove the individual record from pending requests
+    temp_storage.pop(email, None)
 
     return {"message": "Account creation request rejected", "status": 200}
 
