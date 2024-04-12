@@ -53,6 +53,40 @@ async def get_document(request: Request, current_user: dict = Depends(get_curren
     else:
         raise HTTPException(status_code=404, detail="Document not found")
     
+# @documents_router.get('/get_document_details')
+# async def get_document_details(request: Request, current_user: dict = Depends(get_current_user)):
+#     document_id = request.query_params.get('document_id')
+
+#     if not document_id:
+#         raise HTTPException(status_code=400, detail="Document ID is required")
+
+#     try:
+#         document_id_int = int(document_id)
+
+#         document = db.documents.find_one({"document_id": document_id_int}, {"_id": 0})
+#         if not document:
+#             raise HTTPException(status_code=404, detail="Document not found")
+
+#         # Check if the current admin has permission to access this document
+#         if document['admin_id'] != current_user['admin_id']:
+#             raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this document")
+
+#         eligible_signer_ids = [int(signer['signer_id']) for signer in document.get('signers', []) 
+#                                if signer.get('status') in ['submitted', 'success']]
+
+#         signer_documents = list(db.signerdocuments.find({"signer_id": {"$in": eligible_signer_ids}, "document_id": document_id_int}, {"_id": 0}))
+
+#         # Modify signer_documents to include is_image field
+#         for signer_document in signer_documents:
+#             signer_document['is_image'] = signer_document.get('is_image', False)
+
+#         return {
+#             "document_details": document,
+#             "signer_documents": signer_documents
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @documents_router.get('/get_document_details')
 async def get_document_details(request: Request, current_user: dict = Depends(get_current_user)):
     document_id = request.query_params.get('document_id')
@@ -67,11 +101,17 @@ async def get_document_details(request: Request, current_user: dict = Depends(ge
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        # Check if the current admin has permission to access this document
-        if document['admin_id'] != current_user['admin_id']:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this document")
-        
-        if document['indiviudal_id'] != current_user['indiviudal_id']:
+        # Check if the document has an admin_id, if not, check for individual_id
+        if 'admin_id' in document:
+            document_owner_id = document['admin_id']
+        elif 'individual_id' in document:
+            document_owner_id = document['individual_id']
+        else:
+            raise HTTPException(status_code=403, detail="Forbidden: Document owner ID not found")
+
+        # Check if the current user has permission to access this document
+        if document_owner_id != current_user.get('admin_id') and document_owner_id != current_user.get('individual_id'):
+
             raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this document")
 
         eligible_signer_ids = [int(signer['signer_id']) for signer in document.get('signers', []) 
@@ -89,6 +129,7 @@ async def get_document_details(request: Request, current_user: dict = Depends(ge
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
     
 @documents_router.post('/accept_signer_status_individual')
 async def accept_signer_status(data: dict = Body(...), current_user: dict = Depends(get_current_user)):
